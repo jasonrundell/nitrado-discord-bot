@@ -36,6 +36,7 @@ export async function fetchServerStatus(
     status: gameserver.status,
     playerCurrent: query?.player_current ?? null,
     playerMax: query?.player_max ?? null,
+    players: query !== null ? (query.players ?? []) : null,
     checkedAt: new Date(),
   };
 }

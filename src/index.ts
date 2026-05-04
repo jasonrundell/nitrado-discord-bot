@@ -4,26 +4,55 @@ import { fetchServerStatus } from './nitrado.js';
 import {
   createDiscordClient,
   loginAndGetChannel,
-  sendStatusMessage,
+  syncServerDashboardMessage,
+  assertBotCanMaintainServerStatus,
 } from './discord.js';
-import type { ServerStatus } from './types.js';
+import {
+  rosterFromNitrado,
+  loadLegacyPlayerListMessageState,
+} from './playerList.js';
+import {
+  fetchFtpLogTail,
+  parseRosterFromLogTail,
+  rosterFromFtpLogNames,
+} from './ftpLogPlayers.js';
+import type { PlayerRosterSnapshot } from './types.js';
 
 async function main(): Promise<void> {
   console.log('Starting Nitrado Discord Status Bot...');
 
+  const legacyPlayerListState = await loadLegacyPlayerListMessageState();
+  if (legacyPlayerListState) {
+    console.warn(
+      '[legacy] data/player-list-message.json is still present (message ID: ' +
+        `${legacyPlayerListState.messageId}). ` +
+        'Delete the old player-list message in Discord (former players channel) if it remains, ' +
+        'then remove this JSON file.',
+    );
+  }
+
   const client = createDiscordClient();
-  const channel = await loginAndGetChannel(
+  const statusChannel = await loginAndGetChannel(
     client,
     config.discordToken,
     config.discordChannelId,
   );
 
-  console.log(`Connected to Discord. Posting updates to: #${channel.name}`);
+  assertBotCanMaintainServerStatus(statusChannel, client.user);
+
+  console.log(`Connected to Discord. Posting status and roster to: #${statusChannel.name}`);
   console.log(
     `Monitoring Nitrado service ID: ${config.nitradoServiceId}`,
   );
+  if (config.ftpLog) {
+    console.log(
+      `Player list source: FTP log (${config.ftpLog.remotePath}, tail ${config.ftpLog.tailBytes} bytes, every ${config.pollIntervalMs / 1000}s)`,
+    );
+  } else {
+    console.log('Player list source: Nitrado gameserver query');
+  }
 
-  let lastStatus: ServerStatus | null = null;
+  let lastDashboardSignature: string | null = null;
 
   async function checkStatus(): Promise<void> {
     const snapshot = await fetchServerStatus(
@@ -38,16 +67,29 @@ async function main(): Promise<void> {
           : ''),
     );
 
-    if (snapshot.status !== lastStatus) {
-      await sendStatusMessage(
-        channel,
-        lastStatus,
-        snapshot.status,
-        snapshot.playerCurrent,
-        snapshot.playerMax,
+    let roster: PlayerRosterSnapshot;
+    if (config.ftpLog) {
+      console.log(
+        `[${new Date().toISOString()}] FTP: querying remote log "${config.ftpLog.remotePath}" (tail ${config.ftpLog.tailBytes} bytes)`,
       );
-      lastStatus = snapshot.status;
+      const tail = await fetchFtpLogTail(config.ftpLog);
+      const names = parseRosterFromLogTail(
+        tail,
+        config.ftpLog.joinRegexes,
+        config.ftpLog.leaveRegexes,
+      );
+      roster = rosterFromFtpLogNames(names, new Date());
+    } else {
+      roster = rosterFromNitrado(snapshot);
     }
+
+    lastDashboardSignature = await syncServerDashboardMessage(
+      statusChannel,
+      snapshot,
+      roster,
+      lastDashboardSignature,
+      { signatureCountOnly: config.ftpLog?.signatureCountOnly ?? false },
+    );
   }
 
   await checkStatus();

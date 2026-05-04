@@ -11,11 +11,13 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "basic-ftp": "^5.3.1",
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
+    "@vitest/coverage-istanbul": "^2.1.9",
     "@vitest/coverage-v8": "^2.1.8",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",

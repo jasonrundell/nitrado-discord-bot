@@ -20,6 +20,7 @@ describe('fetchServerStatus', () => {
             query: {
               player_current: 5,
               player_max: 20,
+              players: ['Alice', 'Bob'],
             },
           },
         },
@@ -39,10 +40,11 @@ describe('fetchServerStatus', () => {
     expect(snapshot.status).toBe('started');
     expect(snapshot.playerCurrent).toBe(5);
     expect(snapshot.playerMax).toBe(20);
+    expect(snapshot.players).toEqual(['Alice', 'Bob']);
     expect(snapshot.checkedAt).toBeInstanceOf(Date);
   });
 
-  it('returns null player counts when query is null (server not fully started)', async () => {
+  it('returns null player counts and null players when query is null (server not fully started)', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -61,6 +63,52 @@ describe('fetchServerStatus', () => {
     expect(snapshot.status).toBe('stopped');
     expect(snapshot.playerCurrent).toBeNull();
     expect(snapshot.playerMax).toBeNull();
+    expect(snapshot.players).toBeNull();
+  });
+
+  it('returns empty players array when query is available but players field is absent', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        status: 'success',
+        data: {
+          gameserver: {
+            status: 'started',
+            query: {
+              player_current: 0,
+              player_max: 20,
+            },
+          },
+        },
+      }),
+    });
+
+    const snapshot = await fetchServerStatus('my-token', '12345');
+
+    expect(snapshot.players).toEqual([]);
+  });
+
+  it('returns empty players array when query exists but players is empty', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        status: 'success',
+        data: {
+          gameserver: {
+            status: 'started',
+            query: {
+              player_current: 0,
+              player_max: 20,
+              players: [],
+            },
+          },
+        },
+      }),
+    });
+
+    const snapshot = await fetchServerStatus('my-token', '12345');
+
+    expect(snapshot.players).toEqual([]);
   });
 
   it('throws on HTTP 401 Unauthorized', async () => {

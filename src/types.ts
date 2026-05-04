@@ -35,5 +35,31 @@ export interface ServerStatusSnapshot {
   status: ServerStatus;
   playerCurrent: number | null;
   playerMax: number | null;
+  /** null when the server query is unavailable; [] when query is up but no players or names not returned */
+  players: string[] | null;
   checkedAt: Date;
+}
+
+/** Roster data from Nitrado query or FTP log parser, for the dashboard embed. */
+export interface PlayerRosterSnapshot {
+  playerCurrent: number | null;
+  playerMax: number | null;
+  players: string[] | null;
+  checkedAt: Date;
+  rosterSource?: 'nitrado' | 'ftp_log';
+}
+
+export interface FtpLogConfig {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  remotePath: string;
+  tailBytes: number;
+  secure: boolean;
+  timeoutMs: number;
+  joinRegexes: RegExp[];
+  leaveRegexes: RegExp[];
+  /** When true, Discord edits only when `playerCurrent` changes (names refresh on that edit). */
+  signatureCountOnly: boolean;
 }
